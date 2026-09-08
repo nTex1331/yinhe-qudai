@@ -67,12 +67,14 @@ python -m http.server 8765
 
 ### 第 4 步：上线给同学用
 
-项目是 GitHub Pages 部署，访问和 yinhe-campus 同款链路：
+项目部署在 GitHub Pages：
 
-- 主站（海外直连）：`https://ntex1331.github.io/yinhe-qudai/`
-- 国内加速（推荐发这个）：`https://cdn.jsdelivr.net/gh/nTex1331/yinhe-qudai@main/index.html`
+- **主站**：`https://ntex1331.github.io/yinhe-qudai/`（index.html 学生端）
+- **工作台**：`https://ntex1331.github.io/yinhe-qudai/admin.html`（跑腿团队用，建议浏览器加书签）
+- 手机浏览器打开后选「添加到主屏幕」，就像个 App
 
-**发给同学就发国内加速那一条**，手机浏览器直接打开，可"添加到主屏幕"当 App 用。
+> ⚠️ 国内网络访问 GitHub Pages 偶尔不通。若同学普遍打不开，找老黑开通国内通道（把站点发布成 npm 包走 unpkg 加速，需要注册一个免费 npm 账号）。
+> ⚠️ 别用 jsDelivr 的 `cdn.jsdelivr.net/gh/...` 链接当页面入口——它对 HTML 文件返回纯文本，手机上只会看到一堆代码。
 
 ---
 
