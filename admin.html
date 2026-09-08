@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c1c1e">
+<title>银杏代取 · 工作台</title>
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  body { max-width: 760px; }
+  .app-header.dark { background: linear-gradient(135deg,#2b2f36,#141619); box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .app-header.dark .brand { font-size: 18px; }
+  .toolbar { display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .toolbar .btn { box-shadow:none; }
+  .status-line { display:flex; gap:6px; align-items:center; margin-top:10px; }
+  .dot-live { width:8px;height:8px;border-radius:50%;background:#4ade80; animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .list-end { padding-bottom: 70px; text-align:center; font-size:12px; color:var(--ink-3); }
+  .group-hint { font-size:11px; color:var(--ink-3); margin:10px 12px 0; }
+</style>
+</head>
+<body>
+
+<!-- 登录页 -->
+<div id="loginView" class="login-wrap" style="display:none">
+  <div class="login-box">
+    <div class="logo">🛵</div>
+    <h1>银杏代取 · 工作台</h1>
+    <div class="sub" id="loginSub">跑腿团队专用 · 请输入管理口令</div>
+    <div class="field">
+      <input type="password" id="loginSecret" placeholder="管理口令" autocomplete="current-password">
+    </div>
+    <button class="btn" id="btnLogin">进入工作台</button>
+    <div id="demoHint" style="display:none" class="pill-info mt10">演示模式：口令见 config.js 的 ADMIN_SECRET（默认 yinhe-2026）</div>
+  </div>
+</div>
+
+<!-- 工作台 -->
+<div id="workView" style="display:none">
+  <header class="app-header dark">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="brand">🛵 <span id="wName"></span> · 工作台</div>
+      <div style="flex:1"></div>
+      <button class="btn sm ghost" id="btnRefresh" style="color:#fff;border-color:#ffffff44;background:transparent">↻ 刷新</button>
+      <button class="btn sm ghost" id="btnLogout" style="color:#fff;border-color:#ffffff44;background:transparent">退出</button>
+    </div>
+    <div class="status-line" id="liveLine"><span class="dot-live"></span><span style="font-size:12px;opacity:.85">实时接单中 · 每 <span id="liveSec">10</span> 秒自动刷新</span><span style="margin-left:auto;font-size:11px;opacity:.6" id="modeTag"></span></div>
+  </header>
+
+  <div class="stat-row" id="statRow"></div>
+
+  <div class="ztabs" id="zTabs"></div>
+
+  <div id="groupHint" class="group-hint" style="display:none">📍 已按快递点分组：同一快递点的件可以一趟取完</div>
+
+  <div id="orderList"></div>
+  <div class="list-end" id="listEnd">— 到底啦 —</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="assets/store.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const view = { status: null, orders: [], stats: null, timer: null };
+const TABS = [
+  ['pending', '待取件'], ['picking', '取件中'], ['delivering', '配送中'],
+  ['done', '已完成'], ['cancelled', '已取消'], ['all', '全部单']
+];
+
+/* ---------- 初始化 ---------- */
+$('wName').textContent = CFG.APP_NAME;
+$('loginSub').textContent = CFG.APP_NAME + ' · 跑腿团队专用';
+$('liveSec').textContent = CFG.REFRESH_SEC;
+$('modeTag').textContent = API.isDemo() ? '演示模式' : '线上模式';
+$('demoHint').style.display = API.isDemo() ? 'block' : 'none';
+if (API.isDemo()) $('loginSecret').value = CFG.ADMIN_SECRET;
+
+/* ---------- 登录 ---------- */
+$('btnLogin').addEventListener('click', async () => {
+  const secret = $('loginSecret').value.trim();
+  if (!secret) return toast('请输入管理口令');
+  const btn = $('btnLogin');
+  btn.disabled = true; btn.textContent = '验证中…';
+  try {
+    const ok = await API.checkSecret(secret);
+    if (!ok) return toast('口令不对，请重试');
+    API._secret = secret;
+    localStorage.setItem('yinhe_qudai_admin_remember', '1');
+    enterWork();
+  } catch (e) {
+    toast('验证失败：' + (e.message || '请检查网络'));
+  } finally {
+    btn.disabled = false; btn.textContent = '进入工作台';
+  }
+});
+$('loginSecret').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
+$('btnLogout').addEventListener('click', () => {
+  API._secret = '';
+  clearInterval(view.timer);
+  $('workView').style.display = 'none';
+  $('loginView').style.display = 'flex';
+  $('loginSecret').value = '';
+  toast('已退出');
+});
+
+function enterWork() {
+  $('loginView').style.display = 'none';
+  $('workView').style.display = 'block';
+  view.status = 'pending';
+  renderTabs(); renderStats(); loadOrders(); soundPing();
+  view.timer = setInterval(() => {
+    if (!document.hidden) { loadOrders(true); }
+  }, CFG.REFRESH_SEC * 1000);
+}
+
+/* ---------- 统计 ---------- */
+async function renderStats() {
+  try {
+    const s = await API.stats();
+    view.stats = s;
+    const boxes = [
+      ['📥', s.today_count, '今日接单'],
+      ['🕐', s.pending_count, '待取件'],
+      ['🛵', s.picking_count + s.delivering_count, '在路上'],
+      ['✅', s.done_today, '今日完成']
+    ];
+    $('statRow').innerHTML = boxes.map(b =>
+      '<div class="stat-box"><div class="n">' + b[1] + '</div><div class="l">' + b[0] + ' ' + b[2] + '</div></div>').join('');
+    renderTabs();   // 统计到位后刷新 tab 上的数字角标
+  } catch (e) {}
+}
+
+/* ---------- 状态 tab ---------- */
+function renderTabs() {
+  const n = s => (view.stats ? view.stats[s + '_count'] : null);
+  const nAll = view.orders ? view.orders.length : null;
+  $('zTabs').innerHTML = TABS.map(t => {
+    const key = t[0], label = t[1];
+    let cnt = '';
+    if (key === 'all') cnt = view.stats ? '' : '';
+    else if (key === 'pending') cnt = n('pending') != null ? n('pending') : '';
+    else if (key === 'picking') cnt = n('picking') != null ? n('picking') : '';
+    else if (key === 'delivering') cnt = n('delivering') != null ? n('delivering') : '';
+    else cnt = '';
+    return '<div class="ztab' + (view.status === key ? ' active' : '') + '" data-s="' + key + '">' + label +
+      (cnt !== '' ? '<span class="n">' + cnt + '</span>' : '') + '</div>';
+  }).join('');
+  document.querySelectorAll('#zTabs .ztab').forEach(t =>
+    t.addEventListener('click', () => {
+      view.status = t.dataset.s;
+      renderTabs(); loadOrders();
+    }));
+}
+
+/* ---------- 拉单 ---------- */
+let loading = false;
+async function loadOrders(silent) {
+  if (loading) return;
+  loading = true;
+  try {
+    const before = view.orders.length;
+    const list = await API.listOrders(view.status === 'all' ? null : view.status);
+    // 静默轮询时：有新出现的待取件单才提醒（首次加载不提醒）
+    const hadNew = silent && before > 0 &&
+      list.some(o => o.status === 'pending' && !view.orders.some(x => x.order_no === o.order_no));
+    view.orders = list;
+    renderList();
+    renderTabs();
+    if (silent && hadNew && list.length > before) { soundPing(); toast('🔔 有新订单'); }
+    if (!silent) renderStats();
+  } catch (e) {
+    if (!silent) toast('加载失败：' + (e.message || '网络异常'));
+  } finally {
+    loading = false;
+  }
+}
+
+$('btnRefresh').addEventListener('click', () => { renderStats(); loadOrders(); toast('已刷新'); });
+
+/* ---------- 渲染列表（待取件按驿站分组） ---------- */
+function renderList() {
+  const list = view.orders;
+  const box = $('orderList');
+  const hint = $('groupHint');
+  if (!list.length) {
+    box.innerHTML = '<div class="card"><div class="empty"><span class="e">📭</span><span class="t">这里还没有订单</span></div></div>';
+    hint.style.display = 'none';
+    $('listEnd').style.display = 'block';
+    return;
+  }
+  const grouped = view.status === 'pending';
+  hint.style.display = grouped ? 'block' : 'none';
+
+  let html = '';
+  if (grouped) {
+    const map = {};
+    list.forEach(o => { (map[o.station] = map[o.station] || []).push(o); });
+    Object.keys(map).forEach(st => {
+      const items = map[st];
+      const codes = items.map(o => o.pickup_code).join(' / ');
+      html += '<div class="station-head">🏪 ' + esc(st) +
+        '<span class="cnt">' + items.length + ' 件</span>' +
+        '<span class="codes">' + esc(codes) + '</span></div>';
+      items.forEach(o => { html += card(o); });
+    });
+  } else {
+    list.forEach(o => { html += card(o); });
+  }
+  box.innerHTML = html;
+}
+
+function card(o) {
+  const st = o.status;
+  const isDoneOrCancel = st === 'done' || st === 'cancelled';
+  const canCancel = st === 'pending';
+  const actions = isDoneOrCancel ? '' :
+    '<button class="btn sm" data-act="next" data-no="' + o.order_no + '">' + API.NEXT_LABEL[st] + ' →</button>' +
+    (canCancel ? '<button class="btn sm danger-ghost" data-act="cancel" data-no="' + o.order_no + '">取消</button>' : '');
+  return '<div class="card order-card" data-no="' + o.order_no + '">' +
+    '<div class="head"><span class="no">' + o.order_no + '</span>' +
+    '<span class="badge ' + st + '">' + API.STATUS_TEXT[st] + '</span>' +
+    '<span class="time">下单 ' + fmtTime(o.created_at) + '</span></div>' +
+    '<div class="code-row"><div>' +
+    '<div class="code-box">' + esc(o.pickup_code) + '</div>' +
+    '<div class="code-lbl">取件码 · ' + esc(o.station) + (o.carrier ? ' · ' + esc(o.carrier) : '') + '</div></div>' +
+    '<div style="margin-left:auto;text-align:right">' +
+    '<a class="btn sm ghost" style="margin-top:2px" href="tel:' + esc(o.phone) + '">📞 ' + esc(o.phone) + '</a>' +
+    '<div style="font-size:11px;color:var(--ink-3);margin-top:3px">' + esc(o.name) + '</div></div></div>' +
+    '<div class="info-grid">' +
+    '<div><div class="k">送到</div><div class="v">' + esc(o.building) + (o.room ? ' ' + esc(o.room) : '') + '</div></div>' +
+    '<div><div class="k">交接</div><div class="v">' + esc(o.dropoff) + ' · <span class="price">¥' + o.fee + '</span></div></div>' +
+    (o.note ? '<div style="grid-column:1/3"><div class="k">备注</div><div class="v">' + esc(o.note) + '</div></div>' : '') +
+    '</div>' +
+    (actions ? '<div class="order-actions">' + actions + '</div>' : '') +
+    '</div>';
+}
+
+/* ---------- 操作：状态流转 / 取消 ---------- */
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const no = btn.dataset.no;
+  const act = btn.dataset.act;
+  if (act === 'cancel') {
+    const o = view.orders.find(x => x.order_no === no);
+    if (o && o.status !== 'pending') return toast('只有待取件的单才能取消');
+    if (!confirm('确定取消订单 ' + no + ' ？')) return;
+  }
+  const cur = view.orders.find(x => x.order_no === no);
+  const target = act === 'cancel' ? 'cancelled'
+    : act === 'next' ? (cur ? API.STATUS_NEXT[cur.status] : null)
+    : null;
+  if (!target) return toast('订单状态已变化，请刷新后再试');
+  btn.disabled = true;
+  try {
+    const r = await API.updateStatus(no, target);
+    if (!r.ok) return toast(r.msg || '操作失败');
+    toast(act === 'cancel' ? '已取消订单' : '状态已更新 ✓');
+    if (target === 'done') soundDone();
+    loadOrders(); renderStats();
+  } catch (err) {
+    toast('操作失败：' + (err.message || '网络异常'));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* ---------- 提示音（新单/完成） ---------- */
+function beep(freq, dur) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(.14, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + dur);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+  } catch (e) {}
+}
+function soundPing() { beep(880, .25); }
+function soundDone() { beep(660, .18); setTimeout(() => beep(990, .28), 150); }
+
+/* ---------- 工具 ---------- */
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+function fmtTime(iso) {
+  const d = new Date(iso);
+  const h = String(d.getHours()).padStart(2, '0'), m = String(d.getMinutes()).padStart(2, '0');
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + h + ':' + m;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ---------- 自动登录（演示模式/记住状态） ---------- */
+(function autoEnter() {
+  if (API.isDemo()) { API._secret = CFG.ADMIN_SECRET; enterWork(); return; }
+  $('loginView').style.display = 'flex';
+})();
+</script>
+</body>
+</html>
