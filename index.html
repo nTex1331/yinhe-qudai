@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ff6a00">
+<title>银杏代取 · 快递代取送到手</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<!-- ======== 顶部品牌 ======== -->
+<header class="app-header">
+  <div class="brand">🛵 <span id="appName">银杏代取</span></div>
+  <div class="slogan" id="appSlogan">快递代取 · 送到手边</div>
+  <div class="school" id="appSchool"></div>
+</header>
+
+<!-- ======== 页面1：发单 ======== -->
+<section class="page page-pad active" id="page-order">
+  <div class="card">
+    <div class="steps">
+      <div class="step"><div class="dot">📦</div><div class="t">你下单</div><div class="d">填驿站+取件码</div></div>
+      <div class="step"><div class="dot">🏪</div><div class="t">我们去取</div><div class="d">集中取件</div></div>
+      <div class="step"><div class="dot">🏠</div><div class="t">送到你楼下</div><div class="d">到手再付</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 下单代取</div>
+
+    <div class="field">
+      <label>快递放在哪 <span class="req">*</span></label>
+      <select id="frmStation"></select>
+      <input type="text" id="frmStationOther" placeholder="请填写具体快递点位置" style="display:none; margin-top:8px">
+    </div>
+
+    <div class="field">
+      <label>快递公司</label>
+      <select id="frmCarrier"></select>
+    </div>
+
+    <div class="field">
+      <label>取件码 <span class="req">*</span><span class="sub">短信里的取件码/柜号</span></label>
+      <input type="text" id="frmCode" placeholder="例如：1-3-0527 或 柜3-214" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>送到哪栋楼 <span class="req">*</span></label>
+      <select id="frmBuilding"></select>
+    </div>
+
+    <div class="field">
+      <label>楼层 / 寝室号</label>
+      <input type="text" id="frmRoom" placeholder="例如：3-512（送寝门口时必填）" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>怎么交给你</label>
+      <div class="chips" id="frmDropoff">
+        <div class="chip active" data-v="楼下" data-fee="2">楼下自取 <b class="price">¥2</b></div>
+        <div class="chip" data-v="送寝门口" data-fee="3">送寝门口 <b class="price">¥3</b></div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>你的称呼 <span class="req">*</span></label>
+      <input type="text" id="frmName" placeholder="昵称或姓名，方便跑腿联系" maxlength="12">
+    </div>
+
+    <div class="field">
+      <label>手机号 <span class="req">*</span><span class="sub">送达联系 + 查单凭证</span></label>
+      <input type="tel" id="frmPhone" placeholder="11 位手机号" maxlength="11">
+    </div>
+
+    <div class="field">
+      <label>备注</label>
+      <textarea id="frmNote" placeholder="选填：大件 / 易碎 / 急用 / 送到打电话…"></textarea>
+    </div>
+
+    <div class="pill-info">💰 跑腿费 <span id="feeShow">¥2</span>，<b>送达后当面付</b>，平台不经手钱。大件、超重件价格另议，取件前会电话确认。</div>
+
+    <button class="btn mt14" id="btnSubmit">📦 提交代取订单</button>
+  </div>
+  <div class="page-pad-last"></div>
+</section>
+
+<!-- ======== 页面2：查单 ======== -->
+<section class="page" id="page-query">
+  <div class="card">
+    <div class="card-title">🔍 查订单进度</div>
+    <div class="field">
+      <label>订单号</label>
+      <input type="text" id="qryNo" placeholder="下单后收到的 YQ 开头的订单号" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>下单手机号</label>
+      <input type="tel" id="qryPhone" placeholder="下单时填的手机号" maxlength="11">
+    </div>
+    <button class="btn" id="btnQuery">查询进度</button>
+    <div class="mt6 muted" style="font-size:11.5px; text-align:center; margin-top:10px">查询结果只会展示给订单本人</div>
+  </div>
+
+  <div class="card" id="qryResult" style="display:none">
+    <div class="card-title">📦 订单 <span class="no" id="resNo" style="font-size:12px;color:var(--ink-3)"></span></div>
+    <div id="resStatus"></div>
+    <div class="mt14 timeline" id="resTimeline"></div>
+    <div class="mt14 info-grid" id="resInfo"></div>
+    <div class="order-actions">
+      <button class="btn sm ghost" id="btnCopyNo">复制订单号</button>
+      <div class="spacer"></div>
+      <div class="price" id="resFee"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======== 页面3：我的记录 ======== -->
+<section class="page" id="page-mine">
+  <div class="card" style="padding:12px 14px">
+    <div class="flex">
+      <input type="tel" id="minePhone" placeholder="输入手机号查看我的代取记录" maxlength="11" style="flex:1">
+      <button class="btn sm" id="btnMineLoad">加载</button>
+    </div>
+  </div>
+  <div id="mineList"></div>
+  <div class="page-pad-last"></div>
+</section>
+
+<!-- ======== 底部导航 ======== -->
+<nav class="tabbar">
+  <div class="tab active" data-p="order"><span class="ico">📦</span>发单</div>
+  <div class="tab" data-p="query"><span class="ico">🔍</span>查单</div>
+  <div class="tab" data-p="mine"><span class="ico">🕘</span>我的</div>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="assets/store.js"></script>
+<script>
+/* ============ 文案 ============ */
+document.getElementById('appName').textContent = CFG.APP_NAME;
+document.getElementById('appSlogan').textContent = CFG.SLOGAN;
+document.getElementById('appSchool').textContent = CFG.SCHOOL + (API.isDemo() ? '（演示模式·数据仅存本机）' : '');
+if (API.isDemo()) document.title = CFG.APP_NAME + '（演示）';
+
+/* ============ 下拉选项 ============ */
+function fillSelect(id, list, placeholder) {
+  const el = document.getElementById(id);
+  el.innerHTML = '<option value="">' + placeholder + '</option>' +
+    list.map(v => '<option value="' + v + '">' + v + '</option>').join('');
+}
+fillSelect('frmStation', CFG.STATIONS, '选择快递点…');
+fillSelect('frmCarrier', CFG.CARRIERS, '不确定可不选');
+fillSelect('frmBuilding', CFG.BUILDINGS, '选择楼栋…');
+
+/* ============ 送达方式 chips + 价格 ============ */
+const feeShow = document.getElementById('feeShow');
+document.querySelectorAll('#frmDropoff .chip').forEach(ch => {
+  ch.addEventListener('click', () => {
+    document.querySelectorAll('#frmDropoff .chip').forEach(x => x.classList.remove('active'));
+    ch.classList.add('active');
+    const f = Number(ch.dataset.fee);
+    feeShow.textContent = '¥' + f;
+    if (ch.dataset.v === '送寝门口') {
+      document.getElementById('frmRoom').required = true;
+      document.getElementById('frmRoom').placeholder = '必填：楼层-寝室号，例如 3-512';
+    } else {
+      document.getElementById('frmRoom').placeholder = '例如：3-512（送寝门口时必填）';
+    }
+  });
+});
+
+/* ============ 驿站“其他”补充 ============ */
+const stationSel = document.getElementById('frmStation');
+const stationOther = document.getElementById('frmStationOther');
+stationSel.addEventListener('change', () => {
+  stationOther.style.display = stationSel.value === '其他' ? 'block' : 'none';
+});
+
+/* ============ 提交下单 ============ */
+document.getElementById('btnSubmit').addEventListener('click', async () => {
+  const station = stationSel.value;
+  const code = document.getElementById('frmCode').value.trim();
+  const building = document.getElementById('frmBuilding').value;
+  const name = document.getElementById('frmName').value.trim();
+  const phone = document.getElementById('frmPhone').value.trim();
+  const room = document.getElementById('frmRoom').value.trim();
+  const dropoff = document.querySelector('#frmDropoff .chip.active').dataset.v;
+
+  if (!station) return toast('请选择快递点');
+  if (!code) return toast('请填取件码');
+  if (!building) return toast('请选择送到哪栋楼');
+  if (dropoff === '送寝门口' && !room) return toast('送寝门口请填楼层/寝室号');
+  if (!name) return toast('请填你的称呼');
+  if (!/^1\d{10}$/.test(phone)) return toast('请填 11 位手机号');
+
+  const fee = dropoff === '楼下' ? CFG.FEE_DROP_LOBBY : CFG.FEE_DROP_DOOR;
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true; btn.textContent = '提交中…';
+  try {
+    const r = await API.createOrder({
+      station: station === '其他' ? (stationOther.value.trim() || '其他') : station,
+      carrier: document.getElementById('frmCarrier').value,
+      pickup_code: code, building, room, dropoff,
+      name, phone,
+      note: document.getElementById('frmNote').value.trim(),
+      fee
+    });
+    if (!r.ok) return toast(r.msg || '下单失败');
+    saveLocalOrder(r.order_no, phone);
+    toast('🎉 下单成功！跑腿马上出发');
+    // 自动跳查单页并展示
+    document.getElementById('qryNo').value = r.order_no;
+    document.getElementById('qryPhone').value = phone;
+    switchPage('query');
+    await doQuery(true);
+  } catch (e) {
+    toast('下单失败：' + (e.message || '网络异常，请重试'));
+  } finally {
+    btn.disabled = false; btn.textContent = '📦 提交代取订单';
+  }
+});
+
+/* ============ 查单 ============ */
+document.getElementById('btnQuery').addEventListener('click', () => doQuery());
+async function doQuery(silent) {
+  const no = document.getElementById('qryNo').value.trim();
+  const phone = document.getElementById('qryPhone').value.trim();
+  if (!no) return toast('请填订单号');
+  if (!/^1\d{10}$/.test(phone)) return toast('请填下单时的 11 位手机号');
+  const btn = document.getElementById('btnQuery');
+  btn.disabled = true; btn.textContent = '查询中…';
+  try {
+    const o = await API.queryOrder(no, phone);
+    if (!o) return toast('没查到，请核对订单号和手机号');
+    renderResult(o);
+    if (!silent) saveLocalOrder(no, phone);
+  } catch (e) {
+    toast('查询失败：' + (e.message || '网络异常'));
+  } finally {
+    btn.disabled = false; btn.textContent = '查询进度';
+  }
+}
+
+function renderResult(o) {
+  document.getElementById('qryResult').style.display = 'block';
+  document.getElementById('resNo').textContent = o.order_no + ' · ' + fmtTime(o.created_at);
+  document.getElementById('resFee').textContent = '跑腿费 ¥' + o.fee;
+
+  const st = o.status;
+  document.getElementById('resStatus').innerHTML =
+    '<span class="badge ' + st + '">' + API.STATUS_TEXT[st] + '</span>' +
+    (st === 'pending' ? ' <span class="muted" style="font-size:12px">已通知跑腿，稍等片刻</span>'
+     : st === 'done' ? ' <span class="muted" style="font-size:12px">已送达，记得当面付跑腿费哦</span>'
+     : '');
+
+  // 时间线：五档状态
+  const seq = ['pending', 'picking', 'delivering', 'done'];
+  const idx = seq.indexOf(st);
+  const steps = [
+    ['pending', '订单已提交', '跑腿收到通知'],
+    ['picking', '正在取件', '已到' + o.station],
+    ['delivering', '配送中', '送往' + o.building + (o.room ? ' ' + o.room : '')],
+    ['done', '已送达', o.dropoff + (o.dropoff === '送寝门口' ? '' : '自取')]
+  ];
+  let html;
+  if (st === 'cancelled') {
+    // 已取消：只显示“已提交”完成 + “已取消”当前
+    html = '<div class="tl-step done"><div class="tl-dot">✓</div>' +
+      '<div class="tl-body"><div class="t">订单已提交</div><div class="d">跑腿收到通知</div></div></div>' +
+      '<div class="tl-step now"><div class="tl-dot">✕</div>' +
+      '<div class="tl-body"><div class="t">订单已取消</div><div class="d">如有疑问请联系跑腿（下单页有说明）</div></div></div>';
+  } else {
+    html = '';
+    steps.forEach((s, i) => {
+      let cls = 'tl-step';
+      if (i < idx) cls += ' done';
+      else if (i === idx) cls += ' now';
+      html += '<div class="' + cls + '">' +
+        '<div class="tl-dot">' + (i < idx ? '✓' : ['1','2','3','4'][i]) + '</div>' +
+        '<div class="tl-body"><div class="t">' + s[1] + '</div><div class="d">' + s[2] + '</div></div></div>';
+    });
+  }
+  document.getElementById('resTimeline').innerHTML = html;
+
+  document.getElementById('resInfo').innerHTML =
+    '<div><div class="k">快递点</div><div class="v">' + esc(o.station) + (o.carrier ? ' · ' + esc(o.carrier) : '') + '</div></div>' +
+    '<div><div class="k">取件码</div><div class="v code-box" style="padding:2px 8px;font-size:15px;letter-spacing:1px">' + esc(o.pickup_code) + '</div></div>' +
+    '<div><div class="k">送到</div><div class="v">' + esc(o.building) + (o.room ? ' ' + esc(o.room) : '') + '</div></div>' +
+    '<div><div class="k">交接</div><div class="v">' + esc(o.dropoff) + '</div></div>' +
+    (o.note ? '<div style="grid-column:1/3"><div class="k">备注</div><div class="v">' + esc(o.note) + '</div></div>' : '');
+}
+
+document.getElementById('btnCopyNo').addEventListener('click', () => {
+  const no = document.getElementById('resNo').textContent.split(' ')[0];
+  (navigator.clipboard ? navigator.clipboard.writeText(no) : Promise.reject())
+    .then(() => toast('订单号已复制'))
+    .catch(() => toast('复制失败，请长按手动复制'));
+});
+
+/* ============ 我的记录 ============ */
+function localKey() { return 'yinhe_qudai_my_' + (document.getElementById('minePhone').value.trim() || 'x'); }
+function saveLocalOrder(no, phone) {
+  if (!phone) return;
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem('yinhe_qudai_my_' + phone) || '[]'); } catch (e) {}
+  if (!list.includes(no)) { list.unshift(no); list = list.slice(0, 10); }
+  localStorage.setItem('yinhe_qudai_my_' + phone, JSON.stringify(list));
+}
+document.getElementById('btnMineLoad').addEventListener('click', async () => {
+  const phone = document.getElementById('minePhone').value.trim();
+  if (!/^1\d{10}$/.test(phone)) return toast('请填 11 位手机号');
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem('yinhe_qudai_my_' + phone) || '[]'); } catch (e) {}
+  if (!list.length) {
+    document.getElementById('mineList').innerHTML =
+      '<div class="card"><div class="empty"><span class="e">🕘</span><span class="t">这个手机号还没有下单记录</span></div></div>';
+    return;
+  }
+  let html = '';
+  for (const no of list) {
+    try {
+      const o = await API.queryOrder(no, phone);
+      if (!o) continue;
+      html += orderMiniCard(o);
+    } catch (e) {}
+  }
+  document.getElementById('mineList').innerHTML = html || '<div class="card"><div class="empty"><span class="e">🕘</span><span class="t">暂无记录</span></div></div>';
+});
+function orderMiniCard(o) {
+  return '<div class="card order-card" style="cursor:pointer" onclick="openByNo(\'' + o.order_no + '\')">' +
+    '<div class="head"><span class="no">' + o.order_no + '</span>' +
+    '<span class="badge ' + o.status + '">' + API.STATUS_TEXT[o.status] + '</span>' +
+    '<span class="time">' + fmtTime(o.created_at) + '</span></div>' +
+    '<div class="code-row"><div class="code-box">' + esc(o.pickup_code) + '</div>' +
+    '<div style="font-size:13px"><div>' + esc(o.station) + ' → ' + esc(o.building) + ' ' + esc(o.room) + '</div>' +
+    '<div class="muted" style="font-size:11.5px">' + esc(o.dropoff) + ' · 跑腿费 ¥' + o.fee + '</div></div></div></div>';
+}
+function openByNo(no) {
+  document.getElementById('qryNo').value = no;
+  document.getElementById('qryPhone').value = document.getElementById('minePhone').value.trim();
+  switchPage('query');
+  doQuery(true);
+}
+
+/* ============ 工具 ============ */
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ============ 底部导航切换 ============ */
+function switchPage(p) {
+  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+  document.getElementById('page-' + p).classList.add('active');
+  document.querySelectorAll('.tabbar .tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.p === p));
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('.tabbar .tab').forEach(t =>
+  t.addEventListener('click', () => switchPage(t.dataset.p)));
+</script>
+</body>
+</html>
